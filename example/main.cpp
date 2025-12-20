@@ -1,3 +1,7 @@
+/*********************** !!! WARNING !!! **********************/
+/* This example will overwrite any data on the sd-card.       */
+/* Don't use with a card containing anything you want to keep */
+/*********************** !!! WARNING !!! **********************/
 #include "sd_card.h"
 #include "crc7.h"
 #include "crc16.h"
