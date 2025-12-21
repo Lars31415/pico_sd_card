@@ -16,12 +16,14 @@ extern "C"
     enum SD_SPI_ERROR
     {
         E_OK = 0,
-        E_R1 = -1,
-        E_TOKEN = -2,
-        E_INCON = -3,
-        E_CRC = -4,
-        E_RANGE = -5,
-        E_WRITE = -6
+        E_R1 = -1,     // Card rejected command
+        E_TOKEN = -2,  // Data start token (0xFE) never arrived
+        E_INCON = -3,  // Inconsistent data length
+        E_CRC = -4,    // CRC mismatch
+        E_RANGE = -5,  // Block address out of bounds
+        E_WRITE = -6,  // Card rejected data or write failed
+        E_BUSY = -7,   // Card stayed busy (DO low) too long
+        E_TIMEOUT = -8 // General communication timeout
     };
 
     typedef struct sd_descriptor
@@ -49,7 +51,7 @@ extern "C"
 
     int sd_init(sd_config_t *cfg);
     int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc);
-    int sd_write_block(sd_config_t *cfg, uint16_t block, uint8_t *buf);
+    int sd_write_block(sd_config_t *cfg, uint32_t block, uint8_t *buf);
 
 #ifdef __cplusplus
 }

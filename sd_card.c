@@ -10,6 +10,8 @@
 void print_buffer(const uint8_t *bf, uint16_t sz);
 
 static const uint8_t ff = 0xFF;
+static const uint8_t sd_token = 0xFE;
+static const uint8_t sd_data_accept = 0x05;
 
 static inline bool check_config(sd_config_t *cfg)
 {
@@ -39,7 +41,6 @@ static inline bool check_config(sd_config_t *cfg)
     }
     if ((cfg->baud < 100000) || (cfg->baud > 10000000))
         printf("Warning, SPI baud(%u) is out of range 100kHz - 10MHz\n", cfg->baud);
-    cfg->spi = spi0;
     if (((cfg->rx_pin >> 3) & 0x01) == 1)
     {
         if (spi1 != cfg->spi)
@@ -61,20 +62,19 @@ static inline bool check_config(sd_config_t *cfg)
 
 int generate_std_config(sd_config_t *cfg)
 {
-    return generate_config(PICO_DEFAULT_SPI_RX_PIN, 5000000, cfg);
+    return generate_config(PICO_DEFAULT_SPI_RX_PIN, 10000000, cfg);
 }
 
 int generate_config(const uint8_t rx_pin, const uint32_t baud, sd_config_t *cfg)
 {
     memset(cfg, 0, sizeof(sd_config_t));
-    cfg->spi = spi0;
-    if (((rx_pin >> 3) & 0x01) == 1)
-        cfg->spi = spi1;
+    bool is_spi1 = ((cfg->rx_pin >> 3) & 0x01);
+    cfg->spi = is_spi1 ? spi1 : spi0;
     cfg->rx_pin = rx_pin;
     cfg->cs_pin = rx_pin + 1;
     cfg->clk_pin = rx_pin + 2;
     cfg->tx_pin = rx_pin + 3;
-    cfg->baud = 5000000;
+    cfg->baud = baud;
     return 0;
 }
 
@@ -93,6 +93,19 @@ static inline void encode_addr(sd_config_t *cfg, uint32_t addr, uint8_t *p)
     *(p + 1) = (uint8_t)(addr >> 16);
     *(p + 2) = (uint8_t)(addr >> 8);
     *(p + 3) = (uint8_t)(addr);
+}
+
+static inline bool sd_wait_ready(const sd_config_t *cfg, uint32_t timeout_ms)
+{
+    uint8_t res;
+    absolute_time_t timeout_time = make_timeout_time_ms(timeout_ms);
+    do
+    {
+        spi_write_read_blocking(cfg->spi, &ff, &res, 1);
+        if (res == 0xFF)
+            return true; // Card is ready
+    } while (absolute_time_diff_us(get_absolute_time(), timeout_time) > 0);
+    return false; // Card stayed busy (DO low)
 }
 
 static inline uint8_t sd_wait_r1(const sd_config_t *cfg)
@@ -116,7 +129,7 @@ static inline uint8_t sd_wait_token(const sd_config_t *cfg)
     for (int i = 0; i < 100000; i++)
     {
         spi_write_read_blocking(cfg->spi, &ff, &r, 1);
-        if (r == 0xFE) // bit7 cleared
+        if (r == sd_token) // bit7 cleared
             return r;
     }
     printf("token error: 0x%02X\n", r);
@@ -138,6 +151,14 @@ static int sd_cmd(const sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint16_t
 
     // Send commend
     gpio_put(cfg->cs_pin, 0);
+
+    if (!sd_wait_ready(cfg, 500))
+    {
+        gpio_put(cfg->cs_pin, 1);
+        printf("CMD%d card ready timeout.", cmd[0] & 0x3F);
+        return E_BUSY; // Or a dedicated E_BUSY error
+    }
+
     spi_write_blocking(cfg->spi, cmd, 6);
     // flush
     spi_write_blocking(cfg->spi, &ff, 1);
@@ -177,6 +198,13 @@ int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
 
     gpio_put(cfg->cs_pin, 0);
 
+    if (!sd_wait_ready(cfg, 500))
+    {
+        gpio_put(cfg->cs_pin, 1);
+        printf("CMD17 card ready timeout.");
+        return E_BUSY; // Or a dedicated E_BUSY error
+    }
+
     // Send command
     spi_write_blocking(cfg->spi, cmd, 6);
 
@@ -191,7 +219,7 @@ int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
     }
 
     uint8_t token = sd_wait_token(cfg);
-    if (token != 0xFE)
+    if (token != sd_token)
     {
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
@@ -218,13 +246,11 @@ int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
     return E_OK;
 }
 
-int sd_write_block(sd_config_t *cfg, uint16_t block, uint8_t *buf)
+int sd_write_block(sd_config_t *cfg, uint32_t block, uint8_t *buf)
 {
-    const uint8_t token = 0xFE;
-
     if (!check_range(cfg, block))
     {
-        printf("CMD17 failed, range error %lu >= %lu\n", block, cfg->desc.block_count);
+        printf("CMD24 failed, range error %lu >= %lu\n", block, cfg->desc.block_count);
         return E_RANGE;
     }
 
@@ -233,6 +259,13 @@ int sd_write_block(sd_config_t *cfg, uint16_t block, uint8_t *buf)
     sd_encode_cmd(cmd);
 
     gpio_put(cfg->cs_pin, 0);
+
+    if (!sd_wait_ready(cfg, 500))
+    {
+        gpio_put(cfg->cs_pin, 1);
+        printf("CMD24 card ready timeout.");
+        return E_BUSY; // Or a dedicated E_BUSY error
+    }
 
     // Send command
     spi_write_blocking(cfg->spi, cmd, 6);
@@ -247,44 +280,43 @@ int sd_write_block(sd_config_t *cfg, uint16_t block, uint8_t *buf)
         return E_R1;
     }
 
-    spi_write_blocking(cfg->spi, &token, 1);
+    spi_write_blocking(cfg->spi, &sd_token, 1);
 
     uint wl = spi_write_blocking(cfg->spi, buf, block_size);
 
     uint16_t crc = change_order(crc16(buf, block_size, 0));
     spi_write_blocking(cfg->spi, (uint8_t *)&crc, 2);
 
-    int res = 0;
     if (r1 != 0x00)
     {
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD24 failed, %u bytes writen\n", wl);
-        res = E_INCON;
+        return E_INCON;
     }
 
     uint8_t resp;
     spi_write_read_blocking(cfg->spi, &ff, &resp, 1);
 
-    if ((resp & 0x1F) != 0x05)
+    if ((resp & 0x1F) != sd_data_accept)
     {
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD24 failed, status %u\n", (resp & 0x1F));
-        res = E_WRITE;
-    }
-
-    if (res < 0)
-    {
-        gpio_put(cfg->cs_pin, 1);
-        spi_write_blocking(cfg->spi, &ff, 1);
-        return res;
+        return E_WRITE;
     }
 
     uint8_t busy;
+    uint32_t timeout = 500000; // Large timeout for flash programming
     do
     {
-        spi_write_read_blocking(cfg->spi, &ff, &busy, 1);
+        spi_write_read_blocking(cfg->spi, &ff, &busy, 1); //
+        if (--timeout == 0)
+        {
+            gpio_put(cfg->cs_pin, 1);
+            printf("CMD24 timeout waiting for busy release\n");
+            return E_WRITE;
+        }
     } while (busy != 0xFF);
 
     gpio_put(cfg->cs_pin, 1);
@@ -299,6 +331,14 @@ int sd_read_csd(const sd_config_t *cfg, uint8_t *csd)
     sd_encode_cmd(cmd);
 
     gpio_put(cfg->cs_pin, 0);
+
+    if (!sd_wait_ready(cfg, 500))
+    {
+        gpio_put(cfg->cs_pin, 1);
+        printf("CMD9 card ready timeout.");
+        return E_BUSY; // Or a dedicated E_BUSY error
+    }
+
     spi_write_blocking(cfg->spi, cmd, 6);
 
     uint r1 = sd_wait_r1(cfg);
@@ -310,7 +350,7 @@ int sd_read_csd(const sd_config_t *cfg, uint8_t *csd)
     }
 
     uint token = sd_wait_token(cfg);
-    if (token != 0xFE)
+    if (token != sd_token)
     {
         gpio_put(cfg->cs_pin, 1);
         printf("CMD9 failed, token=0x%02X\n", token);
@@ -337,7 +377,7 @@ int sd_init(sd_config_t *cfg)
         return -1;
     // printf("%s %d\n", __FUNCTION__, __LINE__);
     // This example will use SPI0 at 0.5MHz.
-    spi_init(spi_default, 500 * 1000);
+    spi_init(spi_default, 400 * 1000);
 
     gpio_set_function(cfg->rx_pin, GPIO_FUNC_SPI);
     gpio_set_function(cfg->clk_pin, GPIO_FUNC_SPI);
@@ -348,6 +388,9 @@ int sd_init(sd_config_t *cfg)
     gpio_init(cfg->cs_pin);
     gpio_set_dir(cfg->cs_pin, GPIO_OUT);
     gpio_put(cfg->cs_pin, 1);
+
+    gpio_pull_up(cfg->cs_pin);
+    gpio_pull_up(cfg->rx_pin);
 
     gpio_put(cfg->cs_pin, 1);
     for (int i = 0; i < 10; i++)
@@ -366,10 +409,15 @@ int sd_init(sd_config_t *cfg)
     uint8_t cmd55[] = {0x37, 0, 0, 0, 0, 0};
     uint8_t acmd41[] = {0x29, 0x40, 0, 0, 0, 0};
     uint8_t r;
+    absolute_time_t timeout_time = make_timeout_time_ms(1000);
     do
     {
         sd_cmd(cfg, cmd55, NULL, 0);
         r = sd_cmd(cfg, acmd41, NULL, 0);
+        if (absolute_time_diff_us(get_absolute_time(), timeout_time) <= 0)
+        {
+            return E_TIMEOUT;
+        }
     } while (r != 0x00);
 
     // CMD58
@@ -391,7 +439,11 @@ int sd_init(sd_config_t *cfg)
         cfg->desc.card_size = (cfg->desc.block_count << 9);
     }
 
+    // CMD16
+    uint8_t cmd16[] = {0x10, 0, 0, 0x02, 0, 0};
+    sd_cmd(cfg, cmd16, NULL, 0);
+
     spi_set_baudrate(cfg->spi, cfg->baud);
 
-    return 0;
+    return E_OK;
 }
