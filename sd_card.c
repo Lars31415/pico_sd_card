@@ -68,7 +68,7 @@ int generate_std_config(sd_config_t *cfg)
 int generate_config(const uint8_t rx_pin, const uint32_t baud, sd_config_t *cfg)
 {
     memset(cfg, 0, sizeof(sd_config_t));
-    bool is_spi1 = ((cfg->rx_pin >> 3) & 0x01);
+    bool is_spi1 = ((rx_pin >> 3) & 0x01);
     cfg->spi = is_spi1 ? spi1 : spi0;
     cfg->rx_pin = rx_pin;
     cfg->cs_pin = rx_pin + 1;
@@ -104,7 +104,7 @@ static inline bool sd_wait_ready(const sd_config_t *cfg, uint32_t timeout_ms)
         spi_write_read_blocking(cfg->spi, &ff, &res, 1);
         if (res == 0xFF)
             return true; // Card is ready
-    } while (absolute_time_diff_us(get_absolute_time(), timeout_time) > 0);
+    } while (absolute_time_diff_us(timeout_time, get_absolute_time()) > 0);
     return false; // Card stayed busy (DO low)
 }
 
@@ -237,12 +237,18 @@ int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
         printf("CMD17 failed, %u bytes received\n", rl);
         return E_INCON;
     }
-    uint16_t crc1 = change_order(crc16(buf, block_size, 0));
-    if (*crc != crc1)
+
+    uint16_t read_crc = ((uint16_t)crc_bytes[0] << 8) | crc_bytes[1];
+    uint16_t calc_crc = change_order(crc16(buf, block_size, 0));
+    if (read_crc != calc_crc)
     {
-        printf("CMD17 failed, CRC error 0x%02X != 0x%02X \n", crc, crc1);
+        printf("CMD17 failed, CRC error 0x%04X != 0x%04X\n", read_crc, calc_crc);
         return E_CRC;
     }
+
+    if (crc)
+        *crc = read_crc;
+
     return E_OK;
 }
 
@@ -287,7 +293,7 @@ int sd_write_block(sd_config_t *cfg, uint32_t block, uint8_t *buf)
     uint16_t crc = change_order(crc16(buf, block_size, 0));
     spi_write_blocking(cfg->spi, (uint8_t *)&crc, 2);
 
-    if (r1 != 0x00)
+    if (wl != block_size)
     {
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
@@ -377,7 +383,7 @@ int sd_init(sd_config_t *cfg)
         return -1;
     // printf("%s %d\n", __FUNCTION__, __LINE__);
     // This example will use SPI0 at 0.5MHz.
-    spi_init(spi_default, 400 * 1000);
+    spi_init(cfg->spi, 400 * 1000);
 
     gpio_set_function(cfg->rx_pin, GPIO_FUNC_SPI);
     gpio_set_function(cfg->clk_pin, GPIO_FUNC_SPI);
@@ -389,7 +395,6 @@ int sd_init(sd_config_t *cfg)
     gpio_set_dir(cfg->cs_pin, GPIO_OUT);
     gpio_put(cfg->cs_pin, 1);
 
-    gpio_pull_up(cfg->cs_pin);
     gpio_pull_up(cfg->rx_pin);
 
     gpio_put(cfg->cs_pin, 1);
@@ -414,7 +419,7 @@ int sd_init(sd_config_t *cfg)
     {
         sd_cmd(cfg, cmd55, NULL, 0);
         r = sd_cmd(cfg, acmd41, NULL, 0);
-        if (absolute_time_diff_us(get_absolute_time(), timeout_time) <= 0)
+        if (absolute_time_diff_us(timeout_time, get_absolute_time()) <= 0)
         {
             return E_TIMEOUT;
         }
