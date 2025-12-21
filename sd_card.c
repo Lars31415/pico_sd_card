@@ -229,7 +229,8 @@ int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
 
     // Read data
     uint rl = spi_read_blocking(cfg->spi, ff, buf, block_size);
-    spi_read_blocking(cfg->spi, ff, (uint8_t *)crc, 2);
+    uint8_t crc_bytes[2];
+    spi_read_blocking(cfg->spi, ff, crc_bytes, 2);
     gpio_put(cfg->cs_pin, 1);
     spi_write_blocking(cfg->spi, &ff, 1);
     if (rl != block_size)
