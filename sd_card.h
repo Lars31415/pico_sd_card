@@ -11,31 +11,31 @@ extern "C"
 {
 #endif
 
-    const uint16_t block_size = 512;
+    const uint16_t sma_sd_block_size = 512;
 
-    enum SD_SPI_ERROR
+    enum SMA_SD_SPI_ERROR
     {
-        E_OK = 0,
-        E_R1 = -1,     // Card rejected command
-        E_TOKEN = -2,  // Data start token (0xFE) never arrived
-        E_INCON = -3,  // Inconsistent data length
-        E_CRC = -4,    // CRC mismatch
-        E_RANGE = -5,  // Block address out of bounds
-        E_WRITE = -6,  // Card rejected data or write failed
-        E_BUSY = -7,   // Card stayed busy (DO low) too long
-        E_TIMEOUT = -8 // General communication timeout
+        SMA_SD_OK = 0,
+        SMA_SD_R1 = -1,     // Card rejected command
+        SMA_SD_TOKEN = -2,  // Data start token (0xFE) never arrived
+        SMA_SD_INCON = -3,  // Inconsistent data length
+        SMA_SD_CRC = -4,    // CRC mismatch
+        SMA_SD_RANGE = -5,  // Block address out of bounds
+        SMA_SD_WRITE = -6,  // Card rejected data or write failed
+        SMA_SD_BUSY = -7,   // Card stayed busy (DO low) too long
+        SMA_SD_TIMEOUT = -8 // General communication timeout
     };
 
-    typedef struct sd_descriptor
+    typedef struct sma_sd_descriptor
     {
         uint8_t sdhc;
         uint8_t csd_structure; // 0 - 1
         uint32_t c_size;
         uint32_t block_count;
         uint32_t card_size; // bytes
-    } sd_descriptor_t;
+    } sma_sd_descriptor_t;
 
-    typedef struct sd_config
+    typedef struct sma_sd_sdi_config
     {
         spi_inst_t *spi;
         uint8_t rx_pin;
@@ -43,15 +43,15 @@ extern "C"
         uint8_t clk_pin;
         uint8_t tx_pin;
         uint baud;
-        sd_descriptor_t desc;
-    } sd_config_t;
+        sma_sd_descriptor_t desc;
+    } sma_sd_config_t;
 
-    int generate_std_config(sd_config_t *cfg);
-    int generate_config(const uint8_t rx_pin, const uint32_t baud, sd_config_t *cfg);
+    bool sma_sd_generate_std_config(sma_sd_config_t *cfg);
+    bool sma_sd_generate_config(const uint8_t rx_pin, const uint32_t baud, sma_sd_config_t *cfg);
 
-    int sd_init(sd_config_t *cfg);
-    int sd_read_block(sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc);
-    int sd_write_block(sd_config_t *cfg, uint32_t block, uint8_t *buf);
+    int sma_sd_init(sma_sd_config_t *cfg);
+    int sma_sd_read_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc);
+    int sma_sd_write_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf);
 
 #ifdef __cplusplus
 }
