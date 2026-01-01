@@ -7,13 +7,15 @@
 #include <stdio.h>
 #include <string.h>
 
+const uint16_t sma_sd_block_size = 512;
+
 static const uint8_t ff = 0xFF;
 static const uint8_t sd_token = 0xFE;
 static const uint8_t sd_data_accept = 0x05;
 
 void print_buffer(const uint8_t *bf, uint16_t sz);
 
-static inline bool check_config(sma_sd_config_t *cfg)
+static inline bool check_config(const sma_sd_config_t *cfg)
 {
     switch (cfg->rx_pin)
     {
@@ -78,14 +80,14 @@ bool sma_sd_generate_config(const uint8_t rx_pin, const uint32_t baud, sma_sd_co
     return check_config(cfg);
 }
 
-static inline bool check_range(sma_sd_config_t *cfg, uint32_t bn)
+static inline bool check_range(const sma_sd_config_t *cfg, uint32_t bn)
 {
     if (bn >= cfg->desc.block_count)
         return false;
     return true;
 }
 
-static inline void encode_addr(sma_sd_config_t *cfg, uint32_t addr, uint8_t *p)
+static inline void encode_addr(const sma_sd_config_t *cfg, uint32_t addr, uint8_t *p)
 {
     if (!cfg->desc.sdhc)
         addr *= 512;
@@ -180,7 +182,7 @@ static int sd_cmd(const sma_sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint
     return r1;
 }
 
-int sma_sd_read_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
+int sma_sd_read_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
 {
     memset(buf, 0, sma_sd_block_size);
 
@@ -194,7 +196,7 @@ int sma_sd_read_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16
     encode_addr(cfg, block, cmd + 1);
     sd_encode_cmd(cmd);
 
-    print_buffer(cmd, 6);
+    // print_buffer(cmd, 6);
 
     gpio_put(cfg->cs_pin, 0);
 
@@ -253,7 +255,7 @@ int sma_sd_read_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16
     return SMA_SD_OK;
 }
 
-int sma_sd_write_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
+int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
 {
     if (!check_range(cfg, block))
     {

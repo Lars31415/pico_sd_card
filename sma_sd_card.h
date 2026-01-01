@@ -11,7 +11,7 @@ extern "C"
 {
 #endif
 
-    const uint16_t sma_sd_block_size = 512;
+    extern const uint16_t sma_sd_block_size;
 
     enum SMA_SD_SPI_ERROR
     {
@@ -50,8 +50,8 @@ extern "C"
     bool sma_sd_generate_config(const uint8_t rx_pin, const uint32_t baud, sma_sd_config_t *cfg);
 
     int sma_sd_init(sma_sd_config_t *cfg);
-    int sma_sd_read_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc);
-    int sma_sd_write_block(sma_sd_config_t *cfg, uint32_t block, uint8_t *buf);
+    int sma_sd_read_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc);
+    int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf);
 
 #ifdef __cplusplus
 }
