@@ -2,7 +2,7 @@
 /* This example will overwrite any data on the sd-card.       */
 /* Don't use with a card containing anything you want to keep */
 /*********************** !!! WARNING !!! **********************/
-#include "sma_sd_card.h"
+#include "hly_sd_card.h"
 #include "crc7.h"
 #include "crc16.h"
 
@@ -58,12 +58,12 @@ int main(int, char **)
 
     printf("\n");
 
-    sma_sd_config_t cfg;
+    hly_sd_config_t cfg;
     int res = 0;
-    std::cout << (res = sma_generate_std_config(&cfg)) << " " << std::endl;
+    std::cout << (res = hly_generate_std_config(&cfg)) << " " << std::endl;
     if (res == 0)
     {
-        if (sma_sd_init(&cfg) >= 0)
+        if (hly_sd_init(&cfg) >= 0)
         {
             uint32_t test_block_no{0};
 
@@ -71,7 +71,7 @@ int main(int, char **)
             uint8_t buf[512];
             std::memset(buf, 0, sizeof(buf));
             uint16_t crc{0};
-            sma_sd_read_block(&cfg, test_block_no, buf, &crc);
+            hly_sd_read_block(&cfg, test_block_no, buf, &crc);
             print_buffer(buf, sizeof(buf));
             printf("\n");
 
@@ -81,12 +81,12 @@ int main(int, char **)
             for (int i = 0; i < sizeof(wbuf); ++i)
                 wbuf[i] = rand() % 0xFF;
             print_buffer(wbuf, sizeof(wbuf));
-            sma_sd_write_block(&cfg, test_block_no, wbuf);
+            hly_sd_write_block(&cfg, test_block_no, wbuf);
 
             // Read block
             std::memset(buf, 0, sizeof(buf));
             crc = 0;
-            sma_sd_read_block(&cfg, test_block_no, buf, &crc);
+            hly_sd_read_block(&cfg, test_block_no, buf, &crc);
             print_buffer(buf, sizeof(buf));
             printf("\n");
 

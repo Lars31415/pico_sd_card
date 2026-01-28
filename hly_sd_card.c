@@ -1,4 +1,4 @@
-#include "sma_sd_card.h"
+#include "hly_sd_card.h"
 
 #include "crc7.h"
 #include "crc16.h"
@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-const uint16_t sma_sd_block_size = 512;
+const uint16_t hly_sd_block_size = 512;
 
 static const uint8_t ff = 0xFF;
 static const uint8_t sd_token = 0xFE;
@@ -15,7 +15,7 @@ static const uint8_t sd_data_accept = 0x05;
 
 void print_buffer(const uint8_t *bf, uint16_t sz);
 
-static inline bool check_config(const sma_sd_config_t *cfg)
+static inline bool check_config(const hly_sd_config_t *cfg)
 {
     switch (cfg->rx_pin)
     {
@@ -62,14 +62,14 @@ static inline bool check_config(const sma_sd_config_t *cfg)
     return true;
 }
 
-bool sma_sd_generate_std_config(sma_sd_config_t *cfg)
+bool hly_sd_generate_std_config(hly_sd_config_t *cfg)
 {
-    return sma_sd_generate_config(PICO_DEFAULT_SPI_RX_PIN, 10000000, cfg);
+    return hly_sd_generate_config(PICO_DEFAULT_SPI_RX_PIN, 10000000, cfg);
 }
 
-bool sma_sd_generate_config(const uint8_t rx_pin, const uint32_t baud, sma_sd_config_t *cfg)
+bool hly_sd_generate_config(const uint8_t rx_pin, const uint32_t baud, hly_sd_config_t *cfg)
 {
-    memset(cfg, 0, sizeof(sma_sd_config_t));
+    memset(cfg, 0, sizeof(hly_sd_config_t));
     bool is_spi1 = ((rx_pin >> 3) & 0x01);
     cfg->spi = is_spi1 ? spi1 : spi0;
     cfg->rx_pin = rx_pin;
@@ -80,14 +80,14 @@ bool sma_sd_generate_config(const uint8_t rx_pin, const uint32_t baud, sma_sd_co
     return check_config(cfg);
 }
 
-static inline bool check_range(const sma_sd_config_t *cfg, uint32_t bn)
+static inline bool check_range(const hly_sd_config_t *cfg, uint32_t bn)
 {
     if (bn >= cfg->desc.block_count)
         return false;
     return true;
 }
 
-static inline void encode_addr(const sma_sd_config_t *cfg, uint32_t addr, uint8_t *p)
+static inline void encode_addr(const hly_sd_config_t *cfg, uint32_t addr, uint8_t *p)
 {
     if (!cfg->desc.sdhc)
         addr *= 512;
@@ -97,7 +97,7 @@ static inline void encode_addr(const sma_sd_config_t *cfg, uint32_t addr, uint8_
     *(p + 3) = (uint8_t)(addr);
 }
 
-static inline bool sd_wait_ready(const sma_sd_config_t *cfg, uint32_t timeout_ms)
+static inline bool sd_wait_ready(const hly_sd_config_t *cfg, uint32_t timeout_ms)
 {
     uint8_t res;
     absolute_time_t timeout_time = make_timeout_time_ms(timeout_ms);
@@ -110,7 +110,7 @@ static inline bool sd_wait_ready(const sma_sd_config_t *cfg, uint32_t timeout_ms
     return false; // Card stayed busy (DO low)
 }
 
-static inline uint8_t sd_wait_r1(const sma_sd_config_t *cfg)
+static inline uint8_t sd_wait_r1(const hly_sd_config_t *cfg)
 {
     uint8_t r = 0xFF;
     uint8_t ff = 0xFF;
@@ -125,7 +125,7 @@ static inline uint8_t sd_wait_r1(const sma_sd_config_t *cfg)
     return r;
 }
 
-static inline uint8_t sd_wait_token(const sma_sd_config_t *cfg)
+static inline uint8_t sd_wait_token(const hly_sd_config_t *cfg)
 {
     uint8_t r;
     for (int i = 0; i < 100000; i++)
@@ -147,7 +147,7 @@ static inline void sd_encode_cmd(uint8_t cmd[])
         cmd[5] = 0xFF;
 }
 
-static int sd_cmd(const sma_sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint16_t len)
+static int sd_cmd(const hly_sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint16_t len)
 {
     sd_encode_cmd(cmd);
 
@@ -158,7 +158,7 @@ static int sd_cmd(const sma_sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint
     {
         gpio_put(cfg->cs_pin, 1);
         printf("CMD%d card ready timeout.", cmd[0] & 0x3F);
-        return SMA_SD_BUSY; // Or a dedicated SMA_SD_BUSY error
+        return HLY_SD_BUSY; // Or a dedicated HLY_SD_BUSY error
     }
 
     spi_write_blocking(cfg->spi, cmd, 6);
@@ -182,14 +182,14 @@ static int sd_cmd(const sma_sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint
     return r1;
 }
 
-int sma_sd_read_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
+int hly_sd_read_block(const hly_sd_config_t *cfg, uint32_t block, uint8_t *buf, uint16_t *crc)
 {
-    memset(buf, 0, sma_sd_block_size);
+    memset(buf, 0, hly_sd_block_size);
 
     if (!check_range(cfg, block))
     {
         printf("CMD17 failed, range error %lu >= %lu\n", block, cfg->desc.block_count);
-        return SMA_SD_RANGE;
+        return HLY_SD_RANGE;
     }
 
     uint8_t cmd[] = {0x11, 0, 0, 0, 0, 0};
@@ -204,7 +204,7 @@ int sma_sd_read_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, 
     {
         gpio_put(cfg->cs_pin, 1);
         printf("CMD17 card ready timeout.");
-        return SMA_SD_BUSY; // Or a dedicated SMA_SD_BUSY error
+        return HLY_SD_BUSY; // Or a dedicated HLY_SD_BUSY error
     }
 
     // Send command
@@ -217,7 +217,7 @@ int sma_sd_read_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, 
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD17 failed, R1=0x%02X\n", r1);
-        return SMA_SD_R1;
+        return HLY_SD_R1;
     }
 
     uint8_t token = sd_wait_token(cfg);
@@ -226,41 +226,41 @@ int sma_sd_read_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf, 
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD17 failed, token=0x%02X\n", token);
-        return SMA_SD_TOKEN;
+        return HLY_SD_TOKEN;
     }
 
     // Read data
-    uint rl = spi_read_blocking(cfg->spi, ff, buf, sma_sd_block_size);
+    uint rl = spi_read_blocking(cfg->spi, ff, buf, hly_sd_block_size);
     uint8_t crc_bytes[2];
     spi_read_blocking(cfg->spi, ff, crc_bytes, 2);
     gpio_put(cfg->cs_pin, 1);
     spi_write_blocking(cfg->spi, &ff, 1);
-    if (rl != sma_sd_block_size)
+    if (rl != hly_sd_block_size)
     {
         printf("CMD17 failed, %u bytes received\n", rl);
-        return SMA_SD_INCON;
+        return HLY_SD_INCON;
     }
 
     uint16_t read_crc = ((uint16_t)crc_bytes[0] << 8) | crc_bytes[1];
-    uint16_t calc_crc = crc16(buf, sma_sd_block_size, 0);
+    uint16_t calc_crc = crc16(buf, hly_sd_block_size, 0);
     if (read_crc != calc_crc)
     {
         printf("CMD17 failed, CRC error 0x%04X != 0x%04X\n", read_crc, calc_crc);
-        return SMA_SD_CRC;
+        return HLY_SD_CRC;
     }
 
     if (crc)
         *crc = read_crc;
 
-    return SMA_SD_OK;
+    return HLY_SD_OK;
 }
 
-int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
+int hly_sd_write_block(const hly_sd_config_t *cfg, uint32_t block, uint8_t *buf)
 {
     if (!check_range(cfg, block))
     {
         printf("CMD24 failed, range error %lu >= %lu\n", block, cfg->desc.block_count);
-        return SMA_SD_RANGE;
+        return HLY_SD_RANGE;
     }
 
     uint8_t cmd[] = {0x18, 0, 0, 0, 0, 0};
@@ -273,7 +273,7 @@ int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
     {
         gpio_put(cfg->cs_pin, 1);
         printf("CMD24 card ready timeout.");
-        return SMA_SD_BUSY; // Or a dedicated SMA_SD_BUSY error
+        return HLY_SD_BUSY; // Or a dedicated HLY_SD_BUSY error
     }
 
     // Send command
@@ -286,22 +286,22 @@ int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD24 failed, R1=0x%02X\n", r1);
-        return SMA_SD_R1;
+        return HLY_SD_R1;
     }
 
     spi_write_blocking(cfg->spi, &sd_token, 1);
 
-    uint wl = spi_write_blocking(cfg->spi, buf, sma_sd_block_size);
+    uint wl = spi_write_blocking(cfg->spi, buf, hly_sd_block_size);
 
-    uint16_t crc = change_order(crc16(buf, sma_sd_block_size, 0));
+    uint16_t crc = change_order(crc16(buf, hly_sd_block_size, 0));
     spi_write_blocking(cfg->spi, (uint8_t *)&crc, 2);
 
-    if (wl != sma_sd_block_size)
+    if (wl != hly_sd_block_size)
     {
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD24 failed, %u bytes writen\n", wl);
-        return SMA_SD_INCON;
+        return HLY_SD_INCON;
     }
 
     uint8_t resp;
@@ -312,7 +312,7 @@ int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
         gpio_put(cfg->cs_pin, 1);
         spi_write_blocking(cfg->spi, &ff, 1);
         printf("CMD24 failed, status %u\n", (resp & 0x1F));
-        return SMA_SD_WRITE;
+        return HLY_SD_WRITE;
     }
 
     uint8_t busy;
@@ -324,17 +324,17 @@ int sma_sd_write_block(const sma_sd_config_t *cfg, uint32_t block, uint8_t *buf)
         {
             gpio_put(cfg->cs_pin, 1);
             printf("CMD24 timeout waiting for busy release\n");
-            return SMA_SD_WRITE;
+            return HLY_SD_WRITE;
         }
     } while (busy != 0xFF);
 
     gpio_put(cfg->cs_pin, 1);
     spi_write_blocking(cfg->spi, &ff, 1);
 
-    return SMA_SD_OK;
+    return HLY_SD_OK;
 }
 
-static inline int sd_read_csd(const sma_sd_config_t *cfg, uint8_t *csd)
+static inline int sd_read_csd(const hly_sd_config_t *cfg, uint8_t *csd)
 {
     uint8_t cmd[] = {0x09, 0, 0, 0, 0, 0};
     sd_encode_cmd(cmd);
@@ -345,7 +345,7 @@ static inline int sd_read_csd(const sma_sd_config_t *cfg, uint8_t *csd)
     {
         gpio_put(cfg->cs_pin, 1);
         printf("CMD9 card ready timeout.");
-        return SMA_SD_BUSY; // Or a dedicated SMA_SD_BUSY error
+        return HLY_SD_BUSY; // Or a dedicated HLY_SD_BUSY error
     }
 
     spi_write_blocking(cfg->spi, cmd, 6);
@@ -380,11 +380,11 @@ static inline int sd_read_csd(const sma_sd_config_t *cfg, uint8_t *csd)
     return 0;
 }
 
-int sma_sd_init(sma_sd_config_t *cfg)
+int hly_sd_init(hly_sd_config_t *cfg)
 {
     if (!check_config(cfg))
         return -1;
-    // printf("%s %d\n", __FUNCTION__, __LINSMA_SD__);
+    // printf("%s %d\n", __FUNCTION__, __LINHLY_SD__);
     // This example will use SPI0 at 0.5MHz.
     spi_init(cfg->spi, 400 * 1000);
 
@@ -424,7 +424,7 @@ int sma_sd_init(sma_sd_config_t *cfg)
         r = sd_cmd(cfg, acmd41, NULL, 0);
         if (absolute_time_diff_us(get_absolute_time(), timeout_time) <= 0)
         {
-            return SMA_SD_TIMEOUT;
+            return HLY_SD_TIMEOUT;
         }
     } while (r != 0x00);
 
@@ -453,5 +453,5 @@ int sma_sd_init(sma_sd_config_t *cfg)
 
     spi_set_baudrate(cfg->spi, cfg->baud);
 
-    return SMA_SD_OK;
+    return HLY_SD_OK;
 }
