@@ -1,3 +1,8 @@
+/**
+ * @file hly_sd_card.c
+ * @brief Implementation of SD card SPI primitives.
+ */
+
 #include "hly_sd_card.h"
 
 #include "crc7.h"
@@ -15,6 +20,11 @@ static const uint8_t sd_data_accept = 0x05;
 
 void print_buffer(const uint8_t *bf, uint16_t sz);
 
+/**
+ * @brief Internal helper to validate SPI pin assignments for RP2040.
+ * @param cfg Config to check.
+ * @return true if pins match RP2040 SPI peripheral multiplexing.
+ */
 static inline bool check_config(const hly_sd_config_t *cfg)
 {
     switch (cfg->rx_pin)
@@ -87,6 +97,11 @@ static inline bool check_range(const hly_sd_config_t *cfg, uint32_t bn)
     return true;
 }
 
+/**
+ * @brief Internal helper to validate SPI pin assignments for RP2040.
+ * @param cfg Config to check.
+ * @return true if pins match RP2040 SPI peripheral multiplexing.
+ */
 static inline void encode_addr(const hly_sd_config_t *cfg, uint32_t addr, uint8_t *p)
 {
     if (!cfg->desc.sdhc)
@@ -97,6 +112,12 @@ static inline void encode_addr(const hly_sd_config_t *cfg, uint32_t addr, uint8_
     *(p + 3) = (uint8_t)(addr);
 }
 
+/**
+ * @brief Waits for the SD card to release the MISO line (Busy signal).
+ * @param cfg Config handle.
+ * @param timeout_ms Max time to wait.
+ * @return true if card is ready, false on timeout.
+ */
 static inline bool sd_wait_ready(const hly_sd_config_t *cfg, uint32_t timeout_ms)
 {
     uint8_t res;
@@ -110,6 +131,12 @@ static inline bool sd_wait_ready(const hly_sd_config_t *cfg, uint32_t timeout_ms
     return false; // Card stayed busy (DO low)
 }
 
+/**
+ * @brief Waits for the SD card to release the MISO line (Busy signal).
+ * @param cfg Config handle.
+ * @param timeout_ms Max time to wait.
+ * @return true if card is ready, false on timeout.
+ */
 static inline uint8_t sd_wait_r1(const hly_sd_config_t *cfg)
 {
     uint8_t r = 0xFF;
@@ -138,6 +165,14 @@ static inline uint8_t sd_wait_token(const hly_sd_config_t *cfg)
     return r; // timeout
 }
 
+/**
+ * @brief Sends an SD command and optionally retrieves a multi-byte response.
+ * @param cfg Config handle.
+ * @param cmd 6-byte command buffer.
+ * @param rep Buffer for additional response bytes (e.g., R3, R7).
+ * @param len Length of additional response bytes to read.
+ * @return R1 response byte.
+ */
 static inline void sd_encode_cmd(uint8_t cmd[])
 {
     cmd[0] |= 0x40;
@@ -151,7 +186,7 @@ static int sd_cmd(const hly_sd_config_t *cfg, uint8_t cmd[], uint8_t rep[], uint
 {
     sd_encode_cmd(cmd);
 
-    // Send commend
+    // Send command
     gpio_put(cfg->cs_pin, 0);
 
     if (!sd_wait_ready(cfg, 500))
@@ -334,6 +369,12 @@ int hly_sd_write_block(const hly_sd_config_t *cfg, uint32_t block, uint8_t *buf)
     return HLY_SD_OK;
 }
 
+/**
+ * @brief Reads the CSD (Card Specific Data) register.
+ * @param cfg Config handle.
+ * @param csd 16-byte buffer to store the register content.
+ * @return 0 on success, negative on error.
+ */
 static inline int sd_read_csd(const hly_sd_config_t *cfg, uint8_t *csd)
 {
     uint8_t cmd[] = {0x09, 0, 0, 0, 0, 0};
@@ -384,8 +425,6 @@ int hly_sd_init(hly_sd_config_t *cfg)
 {
     if (!check_config(cfg))
         return -1;
-    // printf("%s %d\n", __FUNCTION__, __LINHLY_SD__);
-    // This example will use SPI0 at 0.5MHz.
     spi_init(cfg->spi, 400 * 1000);
 
     gpio_set_function(cfg->rx_pin, GPIO_FUNC_SPI);

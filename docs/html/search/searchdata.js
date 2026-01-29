@@ -1,0 +1,39 @@
+var indexSectionsWithContent =
+{
+  0: "bcdefhprst",
+  1: "h",
+  2: "hr",
+  3: "cehps",
+  4: "bcdfhrst",
+  5: "h",
+  6: "h",
+  7: "h",
+  8: "p"
+};
+
+var indexSectionNames =
+{
+  0: "all",
+  1: "classes",
+  2: "files",
+  3: "functions",
+  4: "variables",
+  5: "typedefs",
+  6: "enums",
+  7: "enumvalues",
+  8: "pages"
+};
+
+var indexSectionLabels =
+{
+  0: "All",
+  1: "Data Structures",
+  2: "Files",
+  3: "Functions",
+  4: "Variables",
+  5: "Typedefs",
+  6: "Enumerations",
+  7: "Enumerator",
+  8: "Pages"
+};
+

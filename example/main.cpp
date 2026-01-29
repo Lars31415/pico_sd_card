@@ -23,7 +23,7 @@
 
 extern "C"
 {
-    void print_buffer(const uint8_t *bf, uint16_t sz)
+    void print_buffer(const uint8_t* bf, uint16_t sz)
     {
         if (sz == 0)
             printf("*none*");
@@ -36,7 +36,7 @@ extern "C"
     }
 }
 
-int main(int, char **)
+int main(int, char**)
 {
     //// Startup code for USB-console start
     bool flag = false;
@@ -60,17 +60,17 @@ int main(int, char **)
 
     hly_sd_config_t cfg;
     int res = 0;
-    std::cout << (res = hly_generate_std_config(&cfg)) << " " << std::endl;
+    std::cout << (res = hly_sd_generate_std_config(&cfg)) << " " << std::endl;
     if (res == 0)
     {
         if (hly_sd_init(&cfg) >= 0)
         {
-            uint32_t test_block_no{0};
+            uint32_t test_block_no{ 0 };
 
             // Read block
             uint8_t buf[512];
             std::memset(buf, 0, sizeof(buf));
-            uint16_t crc{0};
+            uint16_t crc{ 0 };
             hly_sd_read_block(&cfg, test_block_no, buf, &crc);
             print_buffer(buf, sizeof(buf));
             printf("\n");
@@ -99,7 +99,7 @@ int main(int, char **)
 
     // End code for USB-console start
     std::cout << std::endl
-              << "End program!" << std::endl;
+        << "End program!" << std::endl;
     std::cout << std::boolalpha << flag << std::endl;
     stdio_flush();
     if (flag)
