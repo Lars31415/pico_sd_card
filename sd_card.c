@@ -3,7 +3,7 @@
  * @brief Implementation of SD card SPI primitives.
  */
 
-#include "hly_sd_card.h"
+#include "sd_card.h"
 
 #include "crc7.h"
 #include "crc16.h"
